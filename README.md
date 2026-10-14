@@ -76,6 +76,66 @@ Rule 3 (Template): FIRED - Match score 0.76 -> 30/40 points
 Final Score: 75/100 -> MATCH to original_03.jpg
 ```
 
+## Observed weakness in V1: what failed and why
+
+After running v1 on the hard images, noticed that many images involving cropping and resizing were rejected
+Rule 3 use template matching at single scale.
+It might occur the problem because resizing changes the size of image features even when the image come from same original
+original and suspect contain same visual content, one of resized versions might produce higher template matching score
+
+## Design decision for V2: what Rule 4 is and why you chose it
+
+Add Rule 4 using multi-scale template matching instead of replacing Rule 3.
+
+Rule 4 resize suspect image at different scales (0.5, 0.6, 0.7, 0.8, 0.9 and 1.0) and use highest template matching score.
+
+Rule 1 (metadata) = 25
+Rule 2 (histogram) = 25
+Rule 3 (template matching) = 40
+Rule 4 (multi-scale matching) = 10
+100
+
+## Effect of the change: accuracy before/after on easy vs hard
+
+V1 hard-image test, the system matched 29 images and rejected 31 out of 60 images.
+After Rule 4, tested v2 on 135 images including easy modified images, hard modfied images and unrelated random images. It matched 62 images and rejected 73 images.
+Observed that rule 4 produce high similarity score for some cropped and resized images but the additional 10 points were not always enough to change final classification.
+
+## Trade-offs: what new costs or risks did Rule 4 introduce
+Multi-scale template matching requires more computation because the system tests six different image scales instead of one.
+Visually similar but unrelated images can still produce high similarity score causing false postivies. 
+Also has difficulty with rotations and heavily cropped images.
+
+
+## Threshold experiments 
+
+Test three thresholds: 0.40, 0.70, 0.85
+
+0.4: allow more potential matches when comparing images at different scales.
+observed that random_08.jpg an unrelated image was incorrectly matched to original_09
+
+0.85: reduce false positives. successfully rejected random_08.jpg but it also caused two valid modified images to become false negatives
+
+0.70: compare result 0.4 and 0.7 across 135 images, found 28 images had different score but none had different final classification
+
+selected 0.70: provide stricter similarity requirement without reducing number of correctly classified images
+
+experiment showed that changing threshold alone cannot completely solve false positives or improve recognition of heavily cropped images.
+
+
+## AI assistance
+Used ChatGPT to help compare the results of three threshold experiments (0.40, 0.70, 0.85).
+ChatGPT helped me created python scripts to identify difference in final scores and classification between the experiments.
+
+When comparing thresholds of 0.40 and 0.85 found that increasing threshold correctly rejected random_08.jpg 
+but also caused two valid modfied images (original_02 v6 and original_05 v3) to be rejected.
+
+comparing threshold 0.40 and 0.70. out of 135 images, 28 had different final scores but none had different final classification.
+
+It helped me to understand the trade-off between false positives and false negatives.
+reviewed the results and decide to use 0.70 because it maintain the same classification as 0.4 while requiring high similarity score for Rule 4.
+
+
 ## Backup doctrine
 
 Your Codio box can be reset at any time. **Your fork on GitHub is the only safe
